@@ -1,6 +1,6 @@
 # Repository specification: aether-ai-security
 
-**Status:** Documentation baseline copied from the Aether AI master specification. Implementation status must be verified separately.
+**Status:** Repository exists; documentation-only on the inspected `main` branch. No application implementation is present in the audited tree.
 
 ## Mission
 
@@ -8,7 +8,7 @@ Shared policy definitions, prompt/tool guardrails, secret-handling, redaction, a
 
 ## Dependencies and connections
 
-Low-level cryptographic/policy utilities and an optional low-level telemetry interface. Higher-level runtime components consume versioned security contracts; this repository must not import API, agents, UI, or other consumers. Whether policy evaluation is a library or a separately deployed service remains open.
+Keep the core policy/principal contracts dependency-light; domain services call this boundary, not the reverse.
 
 ## Owned capabilities
 
