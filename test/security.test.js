@@ -25,6 +25,12 @@ test("denies missing principal, action, resource, or scope", () => {
   assert.equal(evaluateAuthorization({ ...validRequest, scope: {} }, () => ({ effect: "allow" })).reason, AuthorizationReason.MISSING_SCOPE);
 });
 
+test("denies oversized request identifiers and malformed scope", () => {
+  assert.equal(evaluateAuthorization({ ...validRequest, principalId: "x".repeat(257) }, () => ({ effect: "allow" })).reason, AuthorizationReason.MISSING_PRINCIPAL);
+  assert.equal(evaluateAuthorization({ ...validRequest, action: "x".repeat(129) }, () => ({ effect: "allow" })).reason, AuthorizationReason.MISSING_ACTION);
+  assert.equal(evaluateAuthorization({ ...validRequest, scope: [] }, () => ({ effect: "allow" })).reason, AuthorizationReason.MISSING_SCOPE);
+});
+
 test("allows only when an injected policy explicitly allows", () => {
   const result = evaluateAuthorization(validRequest, () => ({ effect: "allow", obligations: ["audit", "redact"] }));
   assert.equal(result.effect, "allow");
@@ -35,6 +41,13 @@ test("allows only when an injected policy explicitly allows", () => {
 test("denies explicit policy denial and unexpected policy output", () => {
   assert.equal(evaluateAuthorization(validRequest, () => ({ effect: "deny" })).effect, "deny");
   assert.equal(evaluateAuthorization(validRequest, () => ({ effect: "maybe" })).reason, AuthorizationReason.POLICY_ERROR);
+});
+
+test("fails closed for malformed, oversized, or non-string obligations", () => {
+  assert.equal(evaluateAuthorization(validRequest, () => ({ effect: "allow", obligations: "audit" })).reason, AuthorizationReason.POLICY_ERROR);
+  assert.equal(evaluateAuthorization(validRequest, () => ({ effect: "allow", obligations: ["audit", ""] })).reason, AuthorizationReason.POLICY_ERROR);
+  assert.equal(evaluateAuthorization(validRequest, () => ({ effect: "allow", obligations: ["x".repeat(129)] })).reason, AuthorizationReason.POLICY_ERROR);
+  assert.equal(evaluateAuthorization(validRequest, () => ({ effect: "allow", obligations: Array(33).fill("audit") })).reason, AuthorizationReason.POLICY_ERROR);
 });
 
 test("fails closed if policy throws", () => {
