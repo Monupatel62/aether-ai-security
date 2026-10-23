@@ -19,8 +19,15 @@ const REASON = Object.freeze({
   POLICY_ERROR: "POLICY_ERROR",
 });
 
-function nonEmptyString(value) {
-  return typeof value === "string" && value.trim().length > 0;
+const MAX_IDENTIFIER_LENGTH = 256;
+const MAX_ACTION_LENGTH = 128;
+const MAX_OBLIGATIONS = 32;
+const MAX_OBLIGATION_LENGTH = 128;
+
+function boundedString(value, maxLength = MAX_IDENTIFIER_LENGTH) {
+  return typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.length <= maxLength;
 }
 
 function deny(reason, correlationId) {
@@ -28,8 +35,8 @@ function deny(reason, correlationId) {
     contractVersion: AUTHORIZATION_CONTRACT_VERSION,
     effect: "deny",
     reason,
-    obligations: [],
-    ...(nonEmptyString(correlationId) ? { correlationId } : {}),
+    obligations: Object.freeze([]),
+    ...(boundedString(correlationId) ? { correlationId } : {}),
   });
 }
 
@@ -44,8 +51,8 @@ function deny(reason, correlationId) {
 
 /**
  * Evaluate a request using an injected authoritative policy function.
- * The policy function must return { effect: "allow"|"deny", obligations?: string[] }.
- * Errors and all unexpected results fail closed.
+ * Missing/malformed context, evaluator errors, unexpected output, and malformed
+ * obligations all fail closed. This module does not authenticate the caller.
  *
  * @param {AuthorizationRequest} request
  * @param {(request: AuthorizationRequest) => {effect:string, obligations?:string[]}} policy
@@ -56,24 +63,28 @@ export function evaluateAuthorization(request, policy) {
   }
 
   const correlationId = request.correlationId;
-  if (!nonEmptyString(request.principalId)) {
+  if (!boundedString(request.principalId)) {
     return deny(REASON.MISSING_PRINCIPAL, correlationId);
   }
-  if (!nonEmptyString(request.action)) {
+  if (!boundedString(request.action, MAX_ACTION_LENGTH)) {
     return deny(REASON.MISSING_ACTION, correlationId);
   }
   if (
     !request.resource ||
-    !nonEmptyString(request.resource.type) ||
-    !nonEmptyString(request.resource.id)
+    typeof request.resource !== "object" ||
+    Array.isArray(request.resource) ||
+    !boundedString(request.resource.type, MAX_ACTION_LENGTH) ||
+    !boundedString(request.resource.id)
   ) {
     return deny(REASON.MISSING_RESOURCE, correlationId);
   }
+
   const scope = request.scope;
   if (
     !scope ||
     typeof scope !== "object" ||
-    (!nonEmptyString(scope.tenantId) && !nonEmptyString(scope.workspaceId))
+    Array.isArray(scope) ||
+    (!boundedString(scope.tenantId) && !boundedString(scope.workspaceId))
   ) {
     return deny(REASON.MISSING_SCOPE, correlationId);
   }
@@ -82,29 +93,42 @@ export function evaluateAuthorization(request, policy) {
   }
 
   try {
-    const decision = policy(Object.freeze({ ...request, scope: Object.freeze({ ...scope }), resource: Object.freeze({ ...request.resource }) }));
+    const trustedRequest = Object.freeze({
+      ...request,
+      scope: Object.freeze({ ...scope }),
+      resource: Object.freeze({ ...request.resource }),
+    });
+    const decision = policy(trustedRequest);
     if (!decision || (decision.effect !== "allow" && decision.effect !== "deny")) {
       return deny(REASON.POLICY_ERROR, correlationId);
     }
-    const obligations = Array.isArray(decision.obligations) &&
-      decision.obligations.every(nonEmptyString)
-      ? [...new Set(decision.obligations)]
-      : [];
+
     if (decision.effect !== "allow") {
       return Object.freeze({
         contractVersion: AUTHORIZATION_CONTRACT_VERSION,
         effect: "deny",
         reason: REASON.POLICY_DENIED,
-        obligations: [],
-        ...(nonEmptyString(correlationId) ? { correlationId } : {}),
+        obligations: Object.freeze([]),
+        ...(boundedString(correlationId) ? { correlationId } : {}),
       });
     }
+
+    if (
+      decision.obligations !== undefined &&
+      (!Array.isArray(decision.obligations) ||
+        decision.obligations.length > MAX_OBLIGATIONS ||
+        !decision.obligations.every((item) => boundedString(item, MAX_OBLIGATION_LENGTH)))
+    ) {
+      return deny(REASON.POLICY_ERROR, correlationId);
+    }
+
+    const obligations = [...new Set(decision.obligations ?? [])];
     return Object.freeze({
       contractVersion: AUTHORIZATION_CONTRACT_VERSION,
       effect: "allow",
       reason: REASON.ALLOW,
       obligations: Object.freeze(obligations),
-      ...(nonEmptyString(correlationId) ? { correlationId } : {}),
+      ...(boundedString(correlationId) ? { correlationId } : {}),
     });
   } catch {
     return deny(REASON.POLICY_ERROR, correlationId);
