@@ -14,7 +14,7 @@ function validId(value) { return typeof value === "string" && ID.test(value) && 
 export function evaluatePolicy({ principal, action, resource, policies, policyVersion } = {}) {
   if (!isRecord(principal) || !validId(principal.id) || !validId(principal.tenantId)) throw new PolicyError("invalid_principal");
   if (!validId(action) || !isRecord(resource) || !validId(resource.type) || !validId(resource.tenantId)) throw new PolicyError("invalid_request");
-  if (!Array.isArray(policies) || !Number.isSafeInteger(policyVersion) || policyVersion < 1) throw new PolicyError("invalid_policy_set");
+  if (!Array.isArray(policies) || policies.length > 1000 || !Number.isSafeInteger(policyVersion) || policyVersion < 1) throw new PolicyError("invalid_policy_set");
   if (resource.tenantId !== principal.tenantId) return Object.freeze({ allowed: false, reason: "tenant_mismatch", policyVersion });
 
   const matching = [];
@@ -22,7 +22,13 @@ export function evaluatePolicy({ principal, action, resource, policies, policyVe
     if (!isRecord(policy) || !EFFECTS.has(policy.effect) || !Array.isArray(policy.actions) || !Array.isArray(policy.subjectIds) || !Array.isArray(policy.resourceTypes)) {
       throw new PolicyError("malformed_policy");
     }
-    if (policy.actions.some((v) => typeof v !== "string") || policy.subjectIds.some((v) => typeof v !== "string") || policy.resourceTypes.some((v) => typeof v !== "string")) {
+    if (policy.actions.length > 256 || policy.subjectIds.length > 256 || policy.resourceTypes.length > 256
+      || policy.actions.some((v) => v !== "*" && !validId(v))
+      || policy.subjectIds.some((v) => v !== "*" && !validId(v))
+      || policy.resourceTypes.some((v) => v !== "*" && !validId(v))
+      || (policy.tenantId !== "*" && !validId(policy.tenantId))
+      || (policy.resourceId !== undefined && !validId(policy.resourceId))
+      || (policy.ownerOnly !== undefined && typeof policy.ownerOnly !== "boolean")) {
       throw new PolicyError("malformed_policy");
     }
     if (!policy.actions.includes(action) && !policy.actions.includes("*")) continue;
