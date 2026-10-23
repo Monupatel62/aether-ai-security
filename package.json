@@ -1,0 +1,14 @@
+{
+  "name": "@aether-ai/security",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dependency-light, fail-closed authorization decision contract for Aether AI",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check src/index.js && node --test"
+  }
+}
