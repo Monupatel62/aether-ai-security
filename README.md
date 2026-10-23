@@ -1,18 +1,40 @@
-# aether-ai-security
+# @aether-ai/security
 
-Shared policy definitions, prompt/tool guardrails, secret handling, redaction and threat-model requirements.
+Best-effort sensitive-field redaction utilities for Aether AI. These utilities are not a complete DLP scanner or a substitute for security policy enforcement.
 
-**Status:** Documentation foundation only; no security implementation or certification is claimed.
+## Current implementation
 
-## Documentation
-- [Project specification](docs/PROJECT_SPEC.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Dependencies and contracts](docs/DEPENDENCIES_AND_CONTRACTS.md)
-- [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
-- [Technical design](docs/TECHNICAL_DESIGN.md)
-- [Security review](docs/SECURITY_REVIEW.md)
-- [Research and licenses](docs/RESEARCH_AND_LICENSES.md)
-- [Engineering standard](docs/ENGINEERING_STANDARD.md)
-- [Work log](docs/WORKLOG.md)
+- Recursive key-based redaction for credential-like field names.
+- Best-effort redaction of common bearer/API-token patterns in strings.
+- HTTP header value redaction.
+- Bounds for recursion depth, node count, and string length; circular/unserializable values are marked safely.
+- Synthetic tests and Node.js 22 CI with a high/critical dependency audit gate.
 
-[Master catalog](https://github.com/Monupatel62/aether-ai-platform/blob/main/docs/REPOSITORY_CATALOG.md)
+## Important limitations
+
+- Pattern-based redaction can miss secrets and can produce false positives. Do not use it as the only control for sensitive or regulated data.
+- This package does not implement authentication, authorization, policy evaluation, tenant membership, or tool approvals.
+- Protected actions must fail closed when required trusted context is absent, and each owning service must enforce policy at its resource boundary.
+- Policy engine/library-vs-service, version consistency, caching, and decision SLOs remain open decisions.
+
+## Example
+
+```ts
+import { redactSensitiveData } from "@aether-ai/security";
+
+const safe = redactSensitiveData({
+  operation: "model.call",
+  authorization: "Bearer synthetic-token",
+  result: { status: "success" }
+});
+```
+
+## Development
+
+```bash
+npm install
+npm audit --audit-level=high
+npm run typecheck
+npm test
+npm run build
+```
