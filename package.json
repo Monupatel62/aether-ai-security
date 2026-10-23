@@ -1,0 +1,17 @@
+{
+  "name": "@aether-ai/security",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fail-closed, tenant-scoped authorization policy primitives for Aether AI.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check src/index.js && node --check test/policy.test.js"
+  }
+}
