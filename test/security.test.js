@@ -33,3 +33,10 @@ test("rejects malformed policy data and fails closed on loader errors", async ()
   const auth = createAuthorizationService({ loadPolicySet: async () => { throw new Error("private database details"); } });
   await assert.rejects(auth.authorize({ principal, action: "file:read", resource }), (e) => e.code === "policy_unavailable" && !e.message.includes("private"));
 });
+
+
+test("rejects oversized or malformed policy selectors", () => {
+  assert.throws(() => evaluatePolicy({ principal, action: "file:read", resource, policies: Array.from({ length: 1001 }, () => allow), policyVersion: 1 }), (e) => e.code === "invalid_policy_set");
+  assert.throws(() => evaluatePolicy({ principal, action: "file:read", resource, policies: [{ ...allow, actions: ["bad action"] }], policyVersion: 1 }), (e) => e.code === "malformed_policy");
+  assert.throws(() => evaluatePolicy({ principal, action: "file:read", resource, policies: [{ ...allow, ownerOnly: "yes" }], policyVersion: 1 }), (e) => e.code === "malformed_policy");
+});
